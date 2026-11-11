@@ -1,2 +1,2 @@
 # VPN-PQC
-testing ci/cd
+testing ci/
