@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 	"sync"
-	"pqc-vpn/tun"
+	"pqc-vpn/infra/tun"
 )
 
 const bufferSize = 2048
