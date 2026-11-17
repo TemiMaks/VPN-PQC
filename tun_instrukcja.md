@@ -62,7 +62,7 @@ sudo ip netns exec client-ns ip link set lo up
 ```
 
 #### Terminal 1 — Serwer
-Odpala serwer na hoście:
+Odpala serwer na hoście: (ip addr show)
 ```bash
 sudo ./vpn-daemon -mode=server -port=9999 -tun=tun0
 ```
