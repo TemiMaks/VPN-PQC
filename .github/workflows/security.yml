@@ -1,0 +1,43 @@
+name: Security Pipeline
+
+# Uruchamia się na każdym pushu i pull requeście do dowolnego brancha
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  # 1. Wykrywanie wycieków haseł, tokenów i kluczy API
+  secret-scan:
+    name: Secret Leak Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 2. Uniwersalne skanowanie podatności w kodzie i zależnościach (Trivy)
+  vulnerability-scan:
+    name: Vulnerability & SAST Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1' # Zwraca błąd (czerwony status), jeśli znajdzie krytyczną podatność
