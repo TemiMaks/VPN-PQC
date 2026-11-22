@@ -8,9 +8,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
-	"io"
 
-	"golang.org/x/crypto/hkdf"
+	"crypto/hkdf"
 	"pqc-vpn/domain"
 )
 
@@ -90,8 +89,8 @@ func (p *ClassicKeyProvider) GetSessionKeys(ctx context.Context) (keys domain.Se
 		transcript = append(transcript, ownIdentity...)
 		transcript = append(transcript, p.Peer...)
 	}
-	var material [100]byte // two traffic keys, session ID and a confirmation key
-	if _, err = io.ReadFull(hkdf.New(sha256.New, secret, nil, transcript), material[:]); err != nil {
+	material, err := hkdf.Key(sha256.New, secret, nil, string(transcript), 100)
+	if err != nil {
 		return keys, err
 	}
 	keys.SessionID = binary.BigEndian.Uint32(material[64:68])

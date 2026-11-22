@@ -22,6 +22,29 @@ flowchart TD
     V -->|Nie| B["Brak sesji"]
 ```
 
+
+## Jak powstaje wspólny sekret?
+
+```mermaid
+flowchart TD
+    K["Tymczasowa para X25519 klienta"] -->|prywatny lokalnie| KE["ECDH u klienta"]
+    S["Tymczasowa para X25519 serwera"] -->|prywatny lokalnie| SE["ECDH u serwera"]
+    K -->|publiczny przez UDP| SE
+    S -->|publiczny przez UDP| KE
+    KE -->|wspólny sekret| KH["HKDF-SHA256 u klienta"]
+    SE -->|ten sam wspólny sekret| SH["HKDF-SHA256 u serwera"]
+    KH --> KK["Klucze sesyjne klienta"]
+    SH --> SK["Klucze sesyjne serwera"]
+```
+
+Każda strona oblicza sekret **u siebie**, używając własnego klucza
+prywatnego i publicznego klucza rozmówcy. Ani sekret, ani klucze
+sesyjne nie przechodzą przez sieć.
+
+Podpisy Ed25519 wiążą wymienione klucze X25519 z zaufanymi tożsamościami.
+HKDF-SHA256 wyprowadza z sekretu i danych handshaku dwa klucze AES-GCM:
+klucz do wysyłania klienta jest kluczem do odbierania serwera i odwrotnie.
+
 ## Gdzie jest kod?
 
 - `infra/handshake/identity.go` generuje klucze Ed25519 i wczytuje własny klucz
