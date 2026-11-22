@@ -6,15 +6,39 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"pqc-vpn/application"
 	"pqc-vpn/domain"
+	"pqc-vpn/infra/cipher"
+	"pqc-vpn/infra/handshake"
 	"pqc-vpn/infra/tun"
 	"pqc-vpn/infra/udp"
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "keygen" {
+		if len(os.Args) > 3 || (len(os.Args) == 3 && os.Args[2] == "") {
+			log.Fatal("Użycie: vpn-daemon keygen [NOWY_KATALOG]")
+		}
+		dir := application.DefaultKeysDir
+		if len(os.Args) == 3 {
+			dir = os.Args[2]
+		}
+		if err := handshake.GenerateIdentityFiles(dir); err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Zapisano klucze Ed25519 w %s. Udostępniaj tylko identity.pub.", dir)
+		return
+	}
+
 	cfg := application.LoadConfig()
+	if cfg.Mode != "client" && cfg.Mode != "server" {
+		log.Fatal("Tryb musi być client albo server")
+	}
+	if cfg.Identity == "" || cfg.PeerKey == "" {
+		log.Fatal("Ścieżki -identity i -peer-key nie mogą być puste")
+	}
 
 	// 1. Inicjalizacja interfejsu TUN (infra)
 	dev, err := tun.OpenTun(cfg.TunName)
@@ -49,7 +73,28 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	service := application.NewTunnelService(dev, netTransport)
+	defer dev.Close()
+	defer netTransport.Close()
+	provider, err := handshake.NewClassicKeyProvider(netTransport, cfg.Mode == "server", cfg.Identity, cfg.PeerKey)
+	if err != nil {
+		log.Printf("Błąd kluczy tożsamości: %v", err)
+		return
+	}
+	handshakeCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	var keyProvider domain.KeyProvider = provider
+	keys, err := keyProvider.GetSessionKeys(handshakeCtx)
+	cancel()
+	if err != nil {
+		log.Printf("Błąd wymiany kluczy: %v", err)
+		return
+	}
+	packetCipher, err := cipher.NewAESGCMCipher(keys)
+	if err != nil {
+		log.Printf("Błąd szyfrowania: %v", err)
+		return
+	}
+	log.Println("[+] Ustanowiono uwierzytelnioną sesję")
+	service := application.NewTunnelService(dev, netTransport, packetCipher)
 	service.Run(ctx)
 
 	log.Println("[*] Zamykanie tunelu VPN...")

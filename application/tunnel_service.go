@@ -10,12 +10,14 @@ import (
 type TunnelService struct {
 	tun       domain.TunnelDevice
 	transport domain.PacketTransport
+	cipher    domain.PacketCipher
 }
 
-func NewTunnelService(tun domain.TunnelDevice, transport domain.PacketTransport) *TunnelService {
+func NewTunnelService(tun domain.TunnelDevice, transport domain.PacketTransport, cipher domain.PacketCipher) *TunnelService {
 	return &TunnelService{
 		tun:       tun,
 		transport: transport,
+		cipher:    cipher,
 	}
 }
 
@@ -40,7 +42,11 @@ func (s *TunnelService) Run(ctx context.Context) {
 				continue
 			}
 
-			if _, err := s.tun.Write(buf[:n]); err != nil {
+			packet, err := s.cipher.Open(buf[:n])
+			if err != nil {
+				continue
+			}
+			if _, err := s.tun.Write(packet); err != nil {
 				if ctx.Err() != nil {
 					return
 				}
@@ -61,7 +67,12 @@ func (s *TunnelService) Run(ctx context.Context) {
 			continue
 		}
 
-		if err := s.transport.Send(buf[:n]); err != nil {
+		packet, err := s.cipher.Seal(buf[:n])
+		if err != nil {
+			log.Printf("[CIPHER SEAL ERR] %v", err)
+			return
+		}
+		if err := s.transport.Send(packet); err != nil {
 			if ctx.Err() != nil {
 				return
 			}
